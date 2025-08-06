@@ -18,8 +18,6 @@ static bool status_commands = true;
 static bool center_title = false;
 // use title space as status text element
 static bool custom_title = false;
-// title color use active colors
-static bool active_color_title = true;
 // scale
 static uint32_t buffer_scale = 1;
 // font
@@ -31,13 +29,7 @@ static uint32_t tag_count = 26;
 
 // set 16-bit colors for bar
 // use either pixman_color_t struct or HEX_COLOR macro for 8-bit colors
-static pixman_color_t active_fg_color = HEX_COLOR(0xbbbbbbff);
-static pixman_color_t active_bg_color = HEX_COLOR(0x223344ff);
-static pixman_color_t occupied_fg_color = HEX_COLOR(0xbbbbbbff);
-static pixman_color_t occupied_bg_color = HEX_COLOR(0x2222222ff);
-static pixman_color_t inactive_fg_color = HEX_COLOR(0xbbbbbbff);
-static pixman_color_t inactive_bg_color = HEX_COLOR(0x222222ff);
-static pixman_color_t urgent_fg_color = HEX_COLOR(0xf92672ff);
-static pixman_color_t urgent_bg_color = HEX_COLOR(0x222222ff);
-static pixman_color_t middle_bg_color = HEX_COLOR(0x222222ff);
-static pixman_color_t middle_bg_color_selected = HEX_COLOR(0x222222ff);
+static pixman_color_t fg_grey_color = HEX_COLOR(0xbbbbbbff);
+static pixman_color_t fg_red_color  = HEX_COLOR(0xf92672ff);
+static pixman_color_t bg_grey_color = HEX_COLOR(0x222222ff);
+static pixman_color_t bg_blue_color = HEX_COLOR(0x223344ff);

@@ -80,21 +80,9 @@
 	"	-no-center-title		do not center title text on bar\n" \
 	"	-custom-title			do not display window title and treat the area as another status text element; see -title command\n" \
 	"	-no-custom-title		display current window title as normal\n" \
-	"	-active-color-title		title colors will use active colors\n" \
-	"	-no-active-color-title		title colors will use inactive colors\n" \
 	"	-font [FONT]			specify a font\n"	\
 	"	-tags [NUMBER] [FIRST]...[LAST]	if ipc is disabled, specify custom tag names. If NUMBER is 0, then no tag names should be given \n" \
 	"	-vertical-padding [PIXELS]	specify vertical pixel padding above and below text\n" \
-	"	-active-fg-color [COLOR]	specify text color of active tags or monitors\n" \
-	"	-active-bg-color [COLOR]	specify background color of active tags or monitors\n" \
-	"	-occupied-fg-color [COLOR]	specify text color of occupied tags\n" \
-	"	-occupied-bg-color [COLOR]	specify background color of occupied tags\n" \
-	"	-inactive-fg-color [COLOR]	specify text color of inactive tags or monitors\n" \
-	"	-inactive-bg-color [COLOR]	specify background color of inactive tags or monitors\n" \
-	"	-urgent-fg-color [COLOR]	specify text color of urgent tags\n" \
-	"	-urgent-bg-color [COLOR]	specify background color of urgent tags\n" \
-	"	-middle-bg-color [COLOR]	specify background color of the color in the middle of the bar\n" \
-	"	-middle-bg-color-selected [COLOR]	specify background color of the color in the middle of the bar, when selected\n" \
 	"	-scale [BUFFER_SCALE]		specify buffer scale value for integer scaling\n" \
 	"Commands\n"							\
 	"	-target-socket [SOCKET-NAME]	set the socket to send command to. Sockets can be found in `$XDG_RUNTIME_DIR/dwlb/`\n"\
@@ -400,8 +388,8 @@ draw_frame(Bar *bar)
 		if (hide_vacant && !active && !occupied && !urgent)
 			continue;
 
-		pixman_color_t *fg_color = urgent ? &urgent_fg_color : (active ? &active_fg_color : (occupied ? &occupied_fg_color : &inactive_fg_color));
-		pixman_color_t *bg_color = urgent ? &urgent_bg_color : (active ? &active_bg_color : (occupied ? &occupied_bg_color : &inactive_bg_color));
+		pixman_color_t *fg_color = urgent ? &fg_red_color  : &fg_grey_color;
+		pixman_color_t *bg_color = active ? &bg_blue_color : &bg_grey_color;
 
 		if (!hide_vacant && occupied) {
 			pixman_image_fill_boxes(PIXMAN_OP_SRC, foreground,
@@ -437,12 +425,12 @@ draw_frame(Bar *bar)
 	}
 
 	x = draw_text(bar->layout, x, y, foreground, foreground_mask, background,
-		      &inactive_fg_color, &inactive_bg_color, bar->width,
+		      &fg_grey_color, &bg_blue_color, bar->width,
 		      bar->height, bar->textpadding, NULL, 0);
 
 	uint32_t status_width = TEXT_WIDTH(bar->status.text, bar->width - x, bar->textpadding);
 	draw_text(bar->status.text, bar->width - status_width, y, foreground, foreground_mask,
-		  background, &inactive_fg_color, &inactive_bg_color,
+		  background, &fg_grey_color, &bg_grey_color,
 		  bar->width, bar->height, bar->textpadding,
 		  bar->status.colors, bar->status.colors_l);
 
@@ -454,7 +442,7 @@ draw_frame(Bar *bar)
 		nx = MIN(x + bar->textpadding, bar->width - status_width);
 	}
 	pixman_image_fill_boxes(PIXMAN_OP_SRC, background,
-				bar->sel ? &middle_bg_color_selected : &middle_bg_color, 1,
+				bar->sel ? &bg_grey_color : &bg_grey_color, 1,
 				&(pixman_box32_t){
 					.x1 = x, .x2 = nx,
 					.y1 = 0, .y2 = bar->height
@@ -463,14 +451,14 @@ draw_frame(Bar *bar)
 
 	x = draw_text(custom_title ? bar->title.text : bar->window_title,
 		      x, y, foreground, foreground_mask, background,
-		      (bar->sel && active_color_title) ? &active_fg_color : &inactive_fg_color,
-		      (bar->sel && active_color_title) ? &active_bg_color : &inactive_bg_color,
+		      &fg_grey_color,
+		      &bg_grey_color,
 		      bar->width - status_width, bar->height, 0,
 		      custom_title ? bar->title.colors : NULL,
 		      custom_title ? bar->title.colors_l : 0);
 
 	pixman_image_fill_boxes(PIXMAN_OP_SRC, background,
-				bar->sel ? &middle_bg_color_selected : &middle_bg_color, 1,
+				&bg_grey_color, 1,
 				&(pixman_box32_t){
 					.x1 = x, .x2 = bar->width - status_width,
 					.y1 = 0, .y2 = bar->height
@@ -1137,7 +1125,7 @@ parse_into_customtext(CustomText *ct, char *text)
 						Color *color;
 						ARRAY_APPEND(ct->colors, ct->colors_l, ct->colors_c, color);
 						if (!*arg)
-							color->color = inactive_bg_color;
+							color->color = bg_grey_color;
 						else
 							parse_color(arg, &color->color);
 						color->bg = true;
@@ -1146,7 +1134,7 @@ parse_into_customtext(CustomText *ct, char *text)
 						Color *color;
 						ARRAY_APPEND(ct->colors, ct->colors_l, ct->colors_c, color);
 						if (!*arg)
-							color->color = inactive_fg_color;
+							color->color = fg_grey_color;
 						else
 							parse_color(arg, &color->color);
 						color->bg = false;
@@ -1602,10 +1590,6 @@ main(int argc, char **argv)
 			custom_title = true;
 		} else if (!strcmp(argv[i], "-no-custom-title")) {
 			custom_title = false;
-		} else if (!strcmp(argv[i], "-active-color-title")) {
-			active_color_title = true;
-		} else if (!strcmp(argv[i], "-no-active-color-title")) {
-			active_color_title = false;
 		} else if (!strcmp(argv[i], "-font")) {
 			if (++i >= argc)
 				DIE("Option -font requires an argument");
@@ -1614,56 +1598,6 @@ main(int argc, char **argv)
 			if (++i >= argc)
 				DIE("Option -vertical-padding requires an argument");
 			vertical_padding = MAX(MIN(atoi(argv[i]), 100), 0);
-		} else if (!strcmp(argv[i], "-active-fg-color")) {
-			if (++i >= argc)
-				DIE("Option -active-fg-color requires an argument");
-			if (parse_color(argv[i], &active_fg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-active-bg-color")) {
-			if (++i >= argc)
-				DIE("Option -active-bg-color requires an argument");
-			if (parse_color(argv[i], &active_bg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-occupied-fg-color")) {
-			if (++i >= argc)
-				DIE("Option -occupied-fg-color requires an argument");
-			if (parse_color(argv[i], &occupied_fg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-occupied-bg-color")) {
-			if (++i >= argc)
-				DIE("Option -occupied-bg-color requires an argument");
-			if (parse_color(argv[i], &occupied_bg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-inactive-fg-color")) {
-			if (++i >= argc)
-				DIE("Option -inactive-fg-color requires an argument");
-			if (parse_color(argv[i], &inactive_fg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-inactive-bg-color")) {
-			if (++i >= argc)
-				DIE("Option -inactive-bg-color requires an argument");
-			if (parse_color(argv[i], &inactive_bg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-urgent-fg-color")) {
-			if (++i >= argc)
-				DIE("Option -urgent-fg-color requires an argument");
-			if (parse_color(argv[i], &urgent_fg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-urgent-bg-color")) {
-			if (++i >= argc)
-				DIE("Option -urgent-bg-color requires an argument");
-			if (parse_color(argv[i], &urgent_bg_color) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-middle-bg-color-selected")) {
-			if (++i >= argc)
-				DIE("Option -middle-bg-color-selected requires an argument");
-			if (parse_color(argv[i], &middle_bg_color_selected) == -1)
-				DIE("malformed color string");
-		} else if (!strcmp(argv[i], "-middle-bg-color")) {
-			if (++i >= argc)
-				DIE("Option -middle-bg-color requires an argument");
-			if (parse_color(argv[i], &middle_bg_color) == -1)
-				DIE("malformed color string");
 		} else if (!strcmp(argv[i], "-tags")) {
 			if (++i >= argc)
 				DIE("Option -tags requires at least one argument");
