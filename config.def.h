@@ -1,3 +1,4 @@
+#define UPDATESTATUSBAR "/path/to/bin/mystatus --update-status"
 #define HEX_COLOR(hex)				\
 	{ .red   = ((hex >> 24) & 0xff) * 257,	\
 	  .green = ((hex >> 16) & 0xff) * 257,	\
