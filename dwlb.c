@@ -639,6 +639,16 @@ pointer_motion(void *data, struct wl_pointer *pointer, uint32_t time,
 }
 
 static void
+view_tag(char *tag)
+{
+	char *command = NULL;
+	if (asprintf(&command, "%s view %s", DWLKEYS, tag) == -1)
+		EDIE("asprintf");
+	shell_command(command);
+	free(command);
+}
+
+static void
 pointer_frame(void *data, struct wl_pointer *pointer)
 {
 	Seat *seat = (Seat *)data;
@@ -660,6 +670,9 @@ pointer_frame(void *data, struct wl_pointer *pointer)
 
 	if (i < tags_l) {
 		/* Clicked on tags */
+		if (seat->pointer_button == BTN_LEFT) {
+			view_tag(tags[i]);
+		}
 	} else if (seat->pointer_x < (x += TEXT_WIDTH(seat->bar->layout, seat->bar->width - x, seat->bar->textpadding))) {
 		/* Clicked on layout */
 	} else {
