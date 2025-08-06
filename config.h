@@ -1,4 +1,5 @@
 #define DWLKEYS "/usr/local/bin/dwl-keys"
+#define UPDATESTATUSBAR "/home/benc/bin/sbar -s"
 #define HEX_COLOR(hex)				\
 	{ .red   = ((hex >> 24) & 0xff) * 257,	\
 	  .green = ((hex >> 16) & 0xff) * 257,	\

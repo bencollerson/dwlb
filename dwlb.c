@@ -1044,6 +1044,7 @@ read_stdin(void)
 		} else if (!strcmp(wordbeg, "selmon")) {
 			ADVANCE();
 			if ((val = atoi(wordbeg)) != bar->sel) {
+				shell_command(UPDATESTATUSBAR);
 				bar->sel = val;
 				bar->redraw = true;
 			}
