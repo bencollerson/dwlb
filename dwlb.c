@@ -25,7 +25,6 @@
 #include "xdg-shell-protocol.h"
 #include "xdg-output-unstable-v1-protocol.h"
 #include "wlr-layer-shell-unstable-v1-protocol.h"
-#include "dwl-ipc-unstable-v2-protocol.h"
 
 #define DIE(fmt, ...)						\
 	do {							\
@@ -68,9 +67,6 @@
 #define VERSION "0.2"
 #define USAGE								\
 	"usage: dwlb [OPTIONS]\n"					\
-	"Ipc\n"								\
-	"	-ipc				allow commands to be sent to dwl (dwl must be patched)\n" \
-	"	-no-ipc				disable ipc\n"		\
 	"Bar Config\n"							\
 	"	-hidden				bars will initially be hidden\n" \
 	"	-no-hidden			bars will not initially be hidden\n" \
@@ -145,7 +141,6 @@ typedef struct {
 	struct wl_surface *wl_surface;
 	struct zwlr_layer_surface_v1 *layer_surface;
 	struct zxdg_output_v1 *xdg_output;
-	struct zdwl_ipc_output_v2 *dwl_wm_output;
 
 	uint32_t registry_name;
 	char *xdg_output_name;
@@ -192,7 +187,6 @@ static struct wl_shm *shm;
 static struct zwlr_layer_shell_v1 *layer_shell;
 static struct zxdg_output_manager_v1 *output_manager;
 
-static struct zdwl_ipc_manager_v2 *dwl_wm;
 static struct wl_cursor_image *cursor_image;
 static struct wl_surface *cursor_surface;
 
@@ -200,8 +194,6 @@ static struct wl_list bar_list, seat_list;
 
 static char **tags;
 static uint32_t tags_l, tags_c;
-static char **layouts;
-static uint32_t layouts_l, layouts_c;
 
 static struct fcft_font *font;
 static uint32_t height, textpadding, buffer_scale;
@@ -680,22 +672,8 @@ pointer_frame(void *data, struct wl_pointer *pointer)
 
 	if (i < tags_l) {
 		/* Clicked on tags */
-		if (ipc) {
-			if (seat->pointer_button == BTN_LEFT)
-				zdwl_ipc_output_v2_set_tags(seat->bar->dwl_wm_output, 1 << i, 1);
-			else if (seat->pointer_button == BTN_MIDDLE)
-				zdwl_ipc_output_v2_set_tags(seat->bar->dwl_wm_output, ~0, 1);
-			else if (seat->pointer_button == BTN_RIGHT)
-				zdwl_ipc_output_v2_set_tags(seat->bar->dwl_wm_output, seat->bar->mtags ^ (1 << i), 0);
-		}
 	} else if (seat->pointer_x < (x += TEXT_WIDTH(seat->bar->layout, seat->bar->width - x, seat->bar->textpadding))) {
 		/* Clicked on layout */
-		if (ipc) {
-			if (seat->pointer_button == BTN_LEFT)
-				zdwl_ipc_output_v2_set_layout(seat->bar->dwl_wm_output, seat->bar->last_layout_idx);
-			else if (seat->pointer_button == BTN_RIGHT)
-				zdwl_ipc_output_v2_set_layout(seat->bar->dwl_wm_output, 2);
-		}
 	} else {
 		uint32_t status_x = seat->bar->width / buffer_scale - TEXT_WIDTH(seat->bar->status.text, seat->bar->width - x, seat->bar->textpadding) / buffer_scale;
 		if (seat->pointer_x < status_x) {
@@ -855,150 +833,6 @@ hide_bar(Bar *bar)
 	bar->hidden = true;
 }
 
-static void
-dwl_wm_tags(void *data, struct zdwl_ipc_manager_v2 *dwl_wm,
-	uint32_t amount)
-{
-	if (!tags && !(tags = malloc(amount * sizeof(char *))))
-		EDIE("malloc");
-	uint32_t i = tags_l;
-	ARRAY_EXPAND(tags, tags_l, tags_c, MAX(0, (int)amount - (int)tags_l));
-	for (; i < amount; i++)
-		if (!(tags[i] = strdup(tags_names[MIN(i, LENGTH(tags_names)-1)])))
-			EDIE("strdup");
-}
-
-static void
-dwl_wm_layout(void *data, struct zdwl_ipc_manager_v2 *dwl_wm,
-	const char *name)
-{
-	char **ptr;
-	ARRAY_APPEND(layouts, layouts_l, layouts_c, ptr);
-	if (!(*ptr = strdup(name)))
-		EDIE("strdup");
-}
-
-static const struct zdwl_ipc_manager_v2_listener dwl_wm_listener = {
-	.tags = dwl_wm_tags,
-	.layout = dwl_wm_layout
-};
-
-static void
-dwl_wm_output_toggle_visibility(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output)
-{
-	Bar *bar = (Bar *)data;
-
-	if (bar->hidden)
-		show_bar(bar);
-	else
-		hide_bar(bar);
-}
-
-static void
-dwl_wm_output_active(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	uint32_t active)
-{
-	Bar *bar = (Bar *)data;
-
-	if (active != bar->sel)
-		bar->sel = active;
-}
-
-static void
-dwl_wm_output_tag(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	uint32_t tag, uint32_t state, uint32_t clients, uint32_t focused)
-{
-	Bar *bar = (Bar *)data;
-
-	if (state & ZDWL_IPC_OUTPUT_V2_TAG_STATE_ACTIVE)
-		bar->mtags |= 1 << tag;
-	else
-		bar->mtags &= ~(1 << tag);
-	if (clients > 0)
-		bar->ctags |= 1 << tag;
-	else
-		bar->ctags &= ~(1 << tag);
-	if (state & ZDWL_IPC_OUTPUT_V2_TAG_STATE_URGENT)
-		bar->urg |= 1 << tag;
-	else
-		bar->urg &= ~(1 << tag);
-}
-
-static void
-dwl_wm_output_layout(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	uint32_t layout)
-{
-	Bar *bar = (Bar *)data;
-
-	bar->last_layout_idx = bar->layout_idx;
-	bar->layout_idx = layout;
-}
-
-static void
-dwl_wm_output_title(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	const char *title)
-{
-	if (custom_title)
-		return;
-
-	Bar *bar = (Bar *)data;
-
-	if (bar->window_title)
-		free(bar->window_title);
-	if (!(bar->window_title = strdup(title)))
-		EDIE("strdup");
-}
-
-static void
-dwl_wm_output_appid(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	const char *appid)
-{
-}
-
-static void
-dwl_wm_output_layout_symbol(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	const char *layout)
-{
-	Bar *bar = (Bar *)data;
-
-	if (layouts[bar->layout_idx])
-		free(layouts[bar->layout_idx]);
-	if (!(layouts[bar->layout_idx] = strdup(layout)))
-		EDIE("strdup");
-	bar->layout = layouts[bar->layout_idx];
-}
-
-static void
-dwl_wm_output_frame(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output)
-{
-	Bar *bar = (Bar *)data;
-	bar->redraw = true;
-}
-
-static void
-dwl_wm_output_fullscreen(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	uint32_t is_fullscreen)
-{
-}
-
-static void
-dwl_wm_output_floating(void *data, struct zdwl_ipc_output_v2 *dwl_wm_output,
-	uint32_t is_floating)
-{
-}
-
-static const struct zdwl_ipc_output_v2_listener dwl_wm_output_listener = {
-	.toggle_visibility = dwl_wm_output_toggle_visibility,
-	.active = dwl_wm_output_active,
-	.tag = dwl_wm_output_tag,
-	.layout = dwl_wm_output_layout,
-	.title = dwl_wm_output_title,
-	.appid = dwl_wm_output_appid,
-	.layout_symbol = dwl_wm_output_layout_symbol,
-	.frame = dwl_wm_output_frame,
-	.fullscreen = dwl_wm_output_fullscreen,
-	.floating = dwl_wm_output_floating
-};
 
 static void
 setup_bar(Bar *bar)
@@ -1013,12 +847,6 @@ setup_bar(Bar *bar)
 		DIE("Could not create xdg_output");
 	zxdg_output_v1_add_listener(bar->xdg_output, &output_listener, bar);
 
-	if (ipc) {
-		bar->dwl_wm_output = zdwl_ipc_manager_v2_get_output(dwl_wm, bar->wl_output);
-		if (!bar->dwl_wm_output)
-			DIE("Could not create dwl_wm_output");
-		zdwl_ipc_output_v2_add_listener(bar->dwl_wm_output, &dwl_wm_output_listener, bar);
-	}
 
 	if (!bar->hidden)
 		show_bar(bar);
@@ -1036,11 +864,6 @@ handle_global(void *data, struct wl_registry *registry,
 		layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
 	} else if (!strcmp(interface, zxdg_output_manager_v1_interface.name)) {
 		output_manager = wl_registry_bind(registry, name, &zxdg_output_manager_v1_interface, 2);
-	} else if (!strcmp(interface, zdwl_ipc_manager_v2_interface.name)) {
-		if (ipc) {
-			dwl_wm = wl_registry_bind(registry, name, &zdwl_ipc_manager_v2_interface, 2);
-			zdwl_ipc_manager_v2_add_listener(dwl_wm, &dwl_wm_listener, NULL);
-		}
 	} else if (!strcmp(interface, wl_output_interface.name)) {
 		Bar *bar = calloc(1, sizeof(Bar));
 		if (!bar)
@@ -1074,10 +897,8 @@ teardown_bar(Bar *bar)
 		free(bar->title.buttons);
 	if (bar->window_title)
 		free(bar->window_title);
-	if (!ipc && bar->layout)
+	if (bar->layout)
 		free(bar->layout);
-	if (ipc)
-		zdwl_ipc_output_v2_destroy(bar->dwl_wm_output);
 	if (bar->xdg_output_name)
 		free(bar->xdg_output_name);
 	if (!bar->hidden) {
@@ -1602,8 +1423,7 @@ event_loop(void)
 		FD_ZERO(&rfds);
 		FD_SET(wl_fd, &rfds);
 		FD_SET(sock_fd, &rfds);
-		if (!ipc)
-			FD_SET(STDIN_FILENO, &rfds);
+		FD_SET(STDIN_FILENO, &rfds);
 
 		wl_display_flush(display);
 
@@ -1619,7 +1439,7 @@ event_loop(void)
 				break;
 		if (FD_ISSET(sock_fd, &rfds))
 			read_socket();
-		if (!ipc && FD_ISSET(STDIN_FILENO, &rfds))
+		if (FD_ISSET(STDIN_FILENO, &rfds))
 			read_stdin();
 
 		Bar *bar;
@@ -1758,10 +1578,6 @@ main(int argc, char **argv)
 				DIE("Option -toggle-location requires an argument");
 			client_send_command(&sock_address, argv[i], "toggle-location", NULL, target_socket);
 			return 0;
-		} else if (!strcmp(argv[i], "-ipc")) {
-			ipc = true;
-		} else if (!strcmp(argv[i], "-no-ipc")) {
-			ipc = false;
 		} else if (!strcmp(argv[i], "-hide-vacant-tags")) {
 			hide_vacant = true;
 		} else if (!strcmp(argv[i], "-no-hide-vacant-tags")) {
@@ -1892,7 +1708,7 @@ main(int argc, char **argv)
 	struct wl_registry *registry = wl_display_get_registry(display);
 	wl_registry_add_listener(registry, &registry_listener, NULL);
 	wl_display_roundtrip(display);
-	if (!compositor || !shm || !layer_shell || !output_manager || (ipc && !dwl_wm))
+	if (!compositor || !shm || !layer_shell || !output_manager)
 		DIE("Compositor does not support all needed protocols");
 
 	/* Load selected font */
@@ -1908,7 +1724,7 @@ main(int argc, char **argv)
 	height = font->height / buffer_scale + vertical_padding * 2;
 
 	/* Configure tag names */
-	if (!ipc && !tags) {
+	if (!tags) {
 		if (!(tags = malloc(LENGTH(tags_names) * sizeof(char *))))
 			EDIE("malloc");
 		tags_l = tags_c = LENGTH(tags_names);
@@ -1922,16 +1738,14 @@ main(int argc, char **argv)
 		setup_bar(bar);
 	wl_display_roundtrip(display);
 
-	if (!ipc) {
-		/* Configure stdin */
-		if (fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK) == -1)
-			EDIE("fcntl");
+	/* Configure stdin */
+	if (fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK) == -1)
+		EDIE("fcntl");
 
-		/* Allocate stdin buffer */
-		if (!(stdinbuf = malloc(1024)))
-			EDIE("malloc");
-		stdinbuf_cap = 1024;
-	}
+	/* Allocate stdin buffer */
+	if (!(stdinbuf = malloc(1024)))
+		EDIE("malloc");
+	stdinbuf_cap = 1024;
 
 	/* Set up socket */
 	bool found = false;
@@ -1970,18 +1784,12 @@ main(int argc, char **argv)
 	close(sock_fd);
 	unlink(socketpath);
 
-	if (!ipc)
-		free(stdinbuf);
+	free(stdinbuf);
 
 	if (tags) {
 		for (uint32_t i = 0; i < tags_l; i++)
 			free(tags[i]);
 		free(tags);
-	}
-	if (layouts) {
-		for (uint32_t i = 0; i < layouts_l; i++)
-			free(layouts[i]);
-		free(layouts);
 	}
 
 	wl_list_for_each_safe(bar, bar2, &bar_list, link)
@@ -1991,8 +1799,6 @@ main(int argc, char **argv)
 
 	zwlr_layer_shell_v1_destroy(layer_shell);
 	zxdg_output_manager_v1_destroy(output_manager);
-	if (ipc)
-		zdwl_ipc_manager_v2_destroy(dwl_wm);
 
 	fcft_destroy(font);
 	fcft_fini();

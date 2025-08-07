@@ -4,8 +4,6 @@
 	  .blue  = ((hex >> 8) & 0xff) * 257,	\
 	  .alpha = (hex & 0xff) * 257 }
 
-// use ipc functionality
-static bool ipc = false;
 // initially hide all bars
 static bool hidden = false;
 // initially draw all bars at the bottom
