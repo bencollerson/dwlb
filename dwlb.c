@@ -1465,7 +1465,8 @@ read_socket(void)
 		
 	Bar *bar = NULL, *it;
 	bool all = false;
-		
+	bool selectedonly = false;
+
 	if (!strcmp(wordbeg, "all")) {
 		all = true;
 	} else if (!strcmp(wordbeg, "selected")) {
@@ -1475,6 +1476,8 @@ read_socket(void)
 				break;
 			}
 		}
+	} else if (!strcmp(wordbeg, "selectedonly")) {
+		selectedonly = true;
 	} else {
 		wl_list_for_each(it, &bar_list, link) {
 			if (it->xdg_output_name && !strcmp(wordbeg, it->xdg_output_name)) {
@@ -1483,10 +1486,10 @@ read_socket(void)
 			}
 		}
 	}
-		
-	if (!all && !bar)
+
+	if (!all && !selectedonly && !bar)
 		return;
-	
+
 	ADVANCE();
 
 	if (!strcmp(wordbeg, "status")) {
@@ -1502,6 +1505,16 @@ read_socket(void)
 					first = bar;
 				}
 				bar->redraw = true;
+			}
+		} else if (selectedonly) {
+			wl_list_for_each(it, &bar_list, link) {
+				if (it->sel) {
+					parse_into_customtext(&it->status, wordend);
+				}
+				else {
+					parse_into_customtext(&it->status, "");
+				}
+				it->redraw = true;
 			}
 		} else {
 			parse_into_customtext(&bar->status, wordend);
