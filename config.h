@@ -25,12 +25,9 @@ static uint32_t buffer_scale = 1;
 // font
 static char *fontstr = "monospace:size=10";
 
-// tag names
-static char *tags_names[] = {
-	"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
-	"k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
-	"u", "v", "w", "x", "y", "z"
-};
+// tag count
+static char tag_first = 'a';
+static uint32_t tag_count = 26;
 
 // set 16-bit colors for bar
 // use either pixman_color_t struct or HEX_COLOR macro for 8-bit colors

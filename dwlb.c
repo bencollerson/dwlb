@@ -1725,12 +1725,15 @@ main(int argc, char **argv)
 
 	/* Configure tag names */
 	if (!tags) {
-		if (!(tags = malloc(LENGTH(tags_names) * sizeof(char *))))
+		if (!(tags = malloc(tag_count * sizeof(char *))))
 			EDIE("malloc");
-		tags_l = tags_c = LENGTH(tags_names);
-		for (uint32_t i = 0; i < tags_l; i++)
-			if (!(tags[i] = strdup(tags_names[i])))
-				EDIE("strdup");
+		tags_l = tags_c = tag_count;
+		for (uint32_t i = 0; i < tags_l; i++) {
+			char *tag_name = NULL;
+			if (asprintf(&tag_name, "%c", tag_first + i) == -1)
+				EDIE("asprintf");
+			tags[i] = tag_name;
+		}
 	}
 
 	/* Setup bars */
